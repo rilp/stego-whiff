@@ -1,11 +1,14 @@
 import os
 import argparse
+import base64
+from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 PNG_HEADER = b'\x89PNG\r\n\x1a\n'
 PNG_HEADER_LENGTH = len(PNG_HEADER)
 IEND = b'IEND\xaeB\x60\x82'
 IEND_LENGTH = len(IEND)
-
 
 def print_and_exit(msg):
     print(msg)
@@ -32,14 +35,28 @@ def find_message(filename, pos_iend):
         else:
             print("I couldn't find a hidden message. Try with LSB or maybe is just a PNG scam.")
 
+def cypher_message(msg, password):
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=PNG_HEADER+IEND,
+        iterations=390000,
+    )
+    key = base64.urlsafe_b64encode(kdf.derive(bytes(password,'UTF-8')))
+    f = Fernet(key)
+    cypher_msg = f.encrypt(bytes(msg,'UTF-8'))
+    #print(cypher_msg)
+    return msg+password
+
 def main():
     # Define and parse the input arguments
     parser = argparse.ArgumentParser(description="Hide or find a text message in a PNG file. In order to find the message it should be appended after the IEND PNG chunk. The same idea is to hide the message.")
     parserGroup = parser.add_mutually_exclusive_group()
     parserGroup.add_argument("-find",help="Find the hidden message",action="store_true")
     parserGroup.add_argument("-hide",help="Add a hidden message",metavar="Message")
+    parser.add_argument("-passwd",help="Password used to code or decode the message",metavar="Password")
     parser.add_argument("file",help="a PNG file")
-    args = parser.parse_args()
+    args = parser.parse_args(['-hide','Lorem Ipsum Dolo','-passwd','secure password','../cool.png'])
 
     # Check that at least one option (-find or -hide) is choosen
     if args.hide == None and args.find == False:
@@ -57,8 +74,9 @@ def main():
         str = PNG_HEADER + file.read()
         pos = str.find(b'IEND')
     
-    if args.hide:
-        hide_message(filename, pos, args.hide)
+    if args.hide and args.passwd:
+        msg = cypher_message(args.hide, args.passwd)
+        hide_message(filename, pos, msg)
     elif args.find:
         find_message(filename,pos)
 

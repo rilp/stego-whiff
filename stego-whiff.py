@@ -17,9 +17,8 @@ def print_and_exit(msg):
 def hide_message(filename, pos_iend, secrect_msg):
     with open(filename,"r+b") as file:
         file.read(pos_iend + IEND_LENGTH)
-        msg = bytes(secrect_msg,'UTF-8')
-        file.write(msg)
-        file.truncate(pos_iend + IEND_LENGTH + len(msg))
+        file.write(secrect_msg)
+        file.truncate(pos_iend + IEND_LENGTH + len(secrect_msg))
         print('\nThe message has been hidden correctly in "{}"\n'.format(filename))
         print('{\__/}')
         print('( o_o)')
@@ -29,11 +28,7 @@ def find_message(filename, pos_iend):
     with open(filename,"rb") as file:
         file.read(pos_iend + IEND_LENGTH)
         msg = file.read().decode('UTF-8')
-        if msg:
-            print("Jackpot!")
-            print(msg+"\n")
-        else:
-            print("I couldn't find a hidden message. Try with LSB or maybe is just a PNG scam.")
+        return msg
 
 def cypher_message(msg, password):
     kdf = PBKDF2HMAC(
@@ -44,9 +39,24 @@ def cypher_message(msg, password):
     )
     key = base64.urlsafe_b64encode(kdf.derive(bytes(password,'UTF-8')))
     f = Fernet(key)
-    cypher_msg = f.encrypt(bytes(msg,'UTF-8'))
-    #print(cypher_msg)
-    return msg+password
+    secret_msg = f.encrypt(bytes(msg,'UTF-8'))
+    return secret_msg
+
+def uncypher_message(secret_msg, password):
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=PNG_HEADER+IEND,
+        iterations=390000,
+    )
+    key = base64.urlsafe_b64encode(kdf.derive(bytes(password,'UTF-8')))
+    f = Fernet(key)
+    msg = f.decrypt(bytes(secret_msg,'UTF-8'))
+    if msg:
+        print("Jackpot!")
+        print(msg.decode()+"\n")
+    else:
+        print("I couldn't find a hidden message. Try with LSB or maybe is just a PNG scam.")
 
 def main():
     # Define and parse the input arguments
@@ -56,7 +66,7 @@ def main():
     parserGroup.add_argument("-hide",help="Add a hidden message",metavar="Message")
     parser.add_argument("-passwd",help="Password used to code or decode the message",metavar="Password")
     parser.add_argument("file",help="a PNG file")
-    args = parser.parse_args(['-hide','Lorem Ipsum Dolo','-passwd','secure password','../cool.png'])
+    args = parser.parse_args(['-find','-passwd','secure password','../cool.png'])
 
     # Check that at least one option (-find or -hide) is choosen
     if args.hide == None and args.find == False:
@@ -77,6 +87,11 @@ def main():
     if args.hide and args.passwd:
         msg = cypher_message(args.hide, args.passwd)
         hide_message(filename, pos, msg)
+    elif args.hide:
+        hide_message(filename, pos, bytes(args.hide,'UTF-8'))
+    elif args.find and args.passwd:
+        msg = find_message(filename,pos)
+        uncypher_message(msg,args.passwd)
     elif args.find:
         find_message(filename,pos)
 

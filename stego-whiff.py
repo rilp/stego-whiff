@@ -1,6 +1,8 @@
+from logging import exception
 import os
 import argparse
 import base64
+import cryptography
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
@@ -43,20 +45,30 @@ def cypher_message(msg, password):
     return secret_msg
 
 def uncypher_message(secret_msg, password):
-    kdf = PBKDF2HMAC(
-        algorithm=hashes.SHA256(),
-        length=32,
-        salt=PNG_HEADER+IEND,
-        iterations=390000,
-    )
-    key = base64.urlsafe_b64encode(kdf.derive(bytes(password,'UTF-8')))
-    f = Fernet(key)
-    msg = f.decrypt(bytes(secret_msg,'UTF-8'))
-    if msg:
-        print("Jackpot!")
-        print(msg.decode()+"\n")
-    else:
-        print("I couldn't find a hidden message. Try with LSB or maybe is just a PNG scam.")
+    try:
+        kdf = PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=PNG_HEADER+IEND,
+            iterations=390000,
+        )
+        key = base64.urlsafe_b64encode(kdf.derive(bytes(password,'UTF-8')))
+        f = Fernet(key)
+        # Handle the exception when the password doesn't match
+        try:
+            msg = f.decrypt(bytes(secret_msg,'UTF-8'))
+        except cryptography.fernet.InvalidToken:
+            print("\n·--------------------------------------------·")
+            print("| Ah, ah, ah! you didn't say the magic word! |")
+            print("·--------------------------------------------·\n")
+            exit(0)
+        if msg:
+            print("\nJackpot!")
+            print(msg.decode()+"\n")
+        else:
+            print("I couldn't find a hidden message. Try with LSB or maybe is just a PNG scam.")
+    except Exception as e:
+        print("Definetly you did something REALLY wrong")
 
 def main():
     # Define and parse the input arguments
@@ -66,7 +78,7 @@ def main():
     parserGroup.add_argument("-hide",help="Add a hidden message",metavar="Message")
     parser.add_argument("-passwd",help="Password used to code or decode the message",metavar="Password")
     parser.add_argument("file",help="a PNG file")
-    args = parser.parse_args(['-find','-passwd','secure password','../cool.png'])
+    args = parser.parse_args()
 
     # Check that at least one option (-find or -hide) is choosen
     if args.hide == None and args.find == False:
@@ -93,7 +105,9 @@ def main():
         msg = find_message(filename,pos)
         uncypher_message(msg,args.passwd)
     elif args.find:
-        find_message(filename,pos)
+        print("\nJackpot!")
+        print(find_message(filename,pos))
+        print()
 
 if __name__ == "__main__":
     main()

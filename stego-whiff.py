@@ -1,11 +1,16 @@
+from logging import exception
 import os
 import argparse
+import base64
+import cryptography
+from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 PNG_HEADER = b'\x89PNG\r\n\x1a\n'
 PNG_HEADER_LENGTH = len(PNG_HEADER)
 IEND = b'IEND\xaeB\x60\x82'
 IEND_LENGTH = len(IEND)
-
 
 def print_and_exit(msg):
     print(msg)
@@ -14,9 +19,8 @@ def print_and_exit(msg):
 def hide_message(filename, pos_iend, secrect_msg):
     with open(filename,"r+b") as file:
         file.read(pos_iend + IEND_LENGTH)
-        msg = bytes(secrect_msg,'UTF-8')
-        file.write(msg)
-        file.truncate(pos_iend + IEND_LENGTH + len(msg))
+        file.write(secrect_msg)
+        file.truncate(pos_iend + IEND_LENGTH + len(secrect_msg))
         print('\nThe message has been hidden correctly in "{}"\n'.format(filename))
         print('{\__/}')
         print('( o_o)')
@@ -26,11 +30,45 @@ def find_message(filename, pos_iend):
     with open(filename,"rb") as file:
         file.read(pos_iend + IEND_LENGTH)
         msg = file.read().decode('UTF-8')
+        return msg
+
+def cypher_message(msg, password):
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=PNG_HEADER+IEND,
+        iterations=390000,
+    )
+    key = base64.urlsafe_b64encode(kdf.derive(bytes(password,'UTF-8')))
+    f = Fernet(key)
+    secret_msg = f.encrypt(bytes(msg,'UTF-8'))
+    return secret_msg
+
+def uncypher_message(secret_msg, password):
+    try:
+        kdf = PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=PNG_HEADER+IEND,
+            iterations=390000,
+        )
+        key = base64.urlsafe_b64encode(kdf.derive(bytes(password,'UTF-8')))
+        f = Fernet(key)
+        # Handle the exception when the password doesn't match
+        try:
+            msg = f.decrypt(bytes(secret_msg,'UTF-8'))
+        except cryptography.fernet.InvalidToken:
+            print("\n·--------------------------------------------·")
+            print("| Ah, ah, ah! you didn't say the magic word! |")
+            print("·--------------------------------------------·\n")
+            exit(0)
         if msg:
-            print("Jackpot!")
-            print(msg+"\n")
+            print("\nJackpot!")
+            print(msg.decode()+"\n")
         else:
             print("I couldn't find a hidden message. Try with LSB or maybe is just a PNG scam.")
+    except Exception as e:
+        print("Definetly you did something REALLY wrong")
 
 def main():
     # Define and parse the input arguments
@@ -38,6 +76,7 @@ def main():
     parserGroup = parser.add_mutually_exclusive_group()
     parserGroup.add_argument("-find",help="Find the hidden message",action="store_true")
     parserGroup.add_argument("-hide",help="Add a hidden message",metavar="Message")
+    parser.add_argument("-passwd",help="Password used to code or decode the message",metavar="Password")
     parser.add_argument("file",help="a PNG file")
     args = parser.parse_args()
 
@@ -57,10 +96,18 @@ def main():
         str = PNG_HEADER + file.read()
         pos = str.find(b'IEND')
     
-    if args.hide:
-        hide_message(filename, pos, args.hide)
+    if args.hide and args.passwd:
+        msg = cypher_message(args.hide, args.passwd)
+        hide_message(filename, pos, msg)
+    elif args.hide:
+        hide_message(filename, pos, bytes(args.hide,'UTF-8'))
+    elif args.find and args.passwd:
+        msg = find_message(filename,pos)
+        uncypher_message(msg,args.passwd)
     elif args.find:
-        find_message(filename,pos)
+        print("\nJackpot!")
+        print(find_message(filename,pos))
+        print()
 
 if __name__ == "__main__":
     main()

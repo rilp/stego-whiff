@@ -1,4 +1,3 @@
-from logging import exception
 import os
 import argparse
 import base64
@@ -63,7 +62,9 @@ def uncypher_message(secret_msg, password):
             print("·--------------------------------------------·\n")
             exit(0)
         if msg:
-            print("\nJackpot!")
+            print("·----------·")
+            print("| Jackpot! |")
+            print("·----------·")
             print(msg.decode()+"\n")
         else:
             print("I couldn't find a hidden message. Try with LSB or maybe is just a PNG scam.")

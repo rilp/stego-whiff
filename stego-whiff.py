@@ -61,6 +61,7 @@ def uncypher_message(secret_msg, password):
             print("| Ah, ah, ah! you didn't say the magic word! |")
             print("·--------------------------------------------·\n")
             exit(0)
+        
         if msg:
             print("·----------·")
             print("| Jackpot! |")
@@ -104,11 +105,16 @@ def main():
         hide_message(filename, pos, bytes(args.hide,'UTF-8'))
     elif args.find and args.passwd:
         msg = find_message(filename,pos)
-        uncypher_message(msg,args.passwd)
+        uncypher_message(msg, args.passwd)
     elif args.find:
-        print("\nJackpot!")
-        print(find_message(filename,pos))
-        print()
+        msg = find_message(filename, pos)
+        if msg:
+            print("·----------·")
+            print("| Jackpot! |")
+            print("·----------·")
+            print(msg, "\n")
+        else:
+            print("I couldn't find a hidden message. Try with LSB or maybe is just a PNG scam.")
 
 if __name__ == "__main__":
     main()
